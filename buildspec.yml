@@ -4,50 +4,47 @@ env:
   variables:
     AWS_ACCOUNT_ID: "559050205029"
     AWS_REGION: "us-east-1"
-    ECR_REPO_NAME: "chess-pl-sql-ecr-repo"
-    IMAGE_TAG: "chess-pl-sql:latest"
+    ECR_REPO_NAME: "chess-pl-sql-ecr-repo"  # Replace with your ECR repository name
+    IMAGE_TAG: "latest"  # Tag for the latest image
+    IMAGE_NAME: "your-image-name"  # Name of the Docker image
     CLUSTER_NAME: "chess-pl-sql"
-    SERVICE_NAME: "chess-pl-sql-svc"
+    SERVICE_NAME: "chess-pl-sql-svc"	
 
 phases:
   install:
     runtime-versions:
-      python: 3.12 # Specify the Python version you need
+      python: 3.12 
     commands:
-      - echo "Installing dependencies"
-      - pip install --upgrade pip
-      - pip install -r requirements.txt  # Install Python dependencies from requirements.txt
-      - echo "Dependencies installed"
-      - echo "Logging in to Amazon ECR"
-      # Use the updated get-login-password command with AWS CLI v2
+      - echo "Logging in to ECR"
+      # Authenticate to ECR using aws ecr get-login-password
       - aws ecr get-login-password --region $AWS_REGION | docker login --username AWS --password-stdin $AWS_ACCOUNT_ID.dkr.ecr.$AWS_REGION.amazonaws.com
       - echo "Login successful"
 
   pre_build:
     commands:
-      - echo "Starting pre-build phase"
-      - echo "Building the Docker image"
-      # Build Docker image using the Dockerfile in the repository
-      - docker build -t $AWS_ACCOUNT_ID.dkr.ecr.$AWS_REGION.amazonaws.com/$ECR_REPO_NAME:$IMAGE_TAG .
-      - echo "Docker image built"
+      - echo "Building Docker image"
+      # Generate the version tag based on the current date and time (dd-mm-yyyy-hh-mm-ss)
+      - VERSION_TAG=$(date +%d-%m-%Y-%H-%M-%S)
+      - echo "Version tag is $VERSION_TAG"
+      # Build the Docker image and tag it with the version tag
+      - docker build -t $AWS_ACCOUNT_ID.dkr.ecr.$AWS_REGION.amazonaws.com/$ECR_REPO_NAME:$VERSION_TAG .
+      - docker tag $AWS_ACCOUNT_ID.dkr.ecr.$AWS_REGION.amazonaws.com/$ECR_REPO_NAME:$VERSION_TAG $AWS_ACCOUNT_ID.dkr.ecr.$AWS_REGION.amazonaws.com/$ECR_REPO_NAME:$IMAGE_TAG
+      - echo "Docker image built and tagged with $VERSION_TAG and $IMAGE_TAG"
 
   build:
     commands:
-      - echo "Tagging the Docker image"
-      # Tag Docker image for ECR
-      - docker tag $AWS_ACCOUNT_ID.dkr.ecr.$AWS_REGION.amazonaws.com/$ECR_REPO_NAME:$IMAGE_TAG $AWS_ACCOUNT_ID.dkr.ecr.$AWS_REGION.amazonaws.com/$ECR_REPO_NAME:$IMAGE_TAG
       - echo "Pushing Docker image to ECR"
-      # Push Docker image to ECR
+      # Push the versioned tag and the latest tag to ECR
+      - docker push $AWS_ACCOUNT_ID.dkr.ecr.$AWS_REGION.amazonaws.com/$ECR_REPO_NAME:$VERSION_TAG
       - docker push $AWS_ACCOUNT_ID.dkr.ecr.$AWS_REGION.amazonaws.com/$ECR_REPO_NAME:$IMAGE_TAG
-      - echo "Docker image pushed to ECR"
 
   post_build:
     commands:
       - echo "Creating ECS imagedefinitions.json"
-      # Generate the imagedefinitions.json file for ECS deployment
-      - printf '[{"name":"streamlit-app","imageUri":"%s.dkr.ecr.%s.amazonaws.com/%s:%s"}]' $AWS_ACCOUNT_ID $AWS_REGION $ECR_REPO_NAME $IMAGE_TAG > imagedefinitions.json
-      - echo "ECS imagedefinitions.json created"
+      # Create the imagedefinitions.json file for ECS with the dynamic version tag
+      - printf '[{"name":"chess-pl-sql","imageUri":"%s.dkr.ecr.%s.amazonaws.com/%s:%s"}]' $AWS_ACCOUNT_ID $AWS_REGION $ECR_REPO_NAME $VERSION_TAG > imagedefinitions.json
+      - echo "imagedefinitions.json created with version tag $VERSION_TAG"
 
 artifacts:
   files:
-    - imagedefinitions.json  # This file is used by ECS to update the container image in the task definition
+    - imagedefinitions.json
