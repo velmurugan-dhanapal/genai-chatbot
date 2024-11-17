@@ -1,32 +1,46 @@
 version: 0.2
 
+env:
+  variables:
+    AWS_ACCOUNT_ID: "559050205029"
+    AWS_REGION: "us-east-1"
+    ECR_REPO_NAME: "chess-pl-sql-ecr-repo"
+    IMAGE_TAG: "latest"
+    CLUSTER_NAME: "chess-pl-sql"
+    SERVICE_NAME: "chess-pl-sql-svc"
+
 phases:
   install:
     runtime-versions:
-      docker: 18
+      python: 3.12
     commands:
-      # Install AWS CLI to interact with ECR
-      - echo "Installing AWS CLI"
+      - echo "Installing dependencies"
+      - pip install --upgrade pip
+      - pip install -r requirements.txt  # Install Python dependencies from requirements.txt
+      - echo "Dependencies installed"
+
   pre_build:
     commands:
-      # Log in to AWS ECR
+      # Log in to AWS ECR to allow pushing the Docker image to the ECR registry
       - echo "Logging in to Amazon ECR"
       - $(aws ecr get-login --no-include-email --region $AWS_REGION)
+
   build:
     commands:
-      # Build Docker image for the Streamlit app
       - echo "Building Docker image"
-      - docker build -t streamlit-app .
-      # Tag the Docker image for ECR
-      - docker tag streamlit-app:latest $AWS_ACCOUNT_ID.dkr.ecr.$AWS_REGION.amazonaws.com/streamlit-app-repo:latest
-      # Push the Docker image to ECR
-      - docker push $AWS_ACCOUNT_ID.dkr.ecr.$AWS_REGION.amazonaws.com/streamlit-app-repo:latest
+      # Build the Docker image using the Python runtime to generate the app image
+      - docker build -t $AWS_ACCOUNT_ID.dkr.ecr.$AWS_REGION.amazonaws.com/$ECR_REPO_NAME:$IMAGE_TAG .
+      # Tag the Docker image to push to ECR
+      - docker tag $AWS_ACCOUNT_ID.dkr.ecr.$AWS_REGION.amazonaws.com/$ECR_REPO_NAME:$IMAGE_TAG $AWS_ACCOUNT_ID.dkr.ecr.$AWS_REGION.amazonaws.com/$ECR_REPO_NAME:$IMAGE_TAG
+      # Push the Docker image to the ECR registry
+      - docker push $AWS_ACCOUNT_ID.dkr.ecr.$AWS_REGION.amazonaws.com/$ECR_REPO_NAME:$IMAGE_TAG
+
   post_build:
     commands:
-      # Create imagedefinitions.json for ECS deployment
+      # Create ECS deployment artifact (imagedefinitions.json) required by CodePipeline for ECS deployment
       - echo "Creating ECS imagedefinitions.json"
-      - printf '[{"name":"streamlit-app","imageUri":"%s"}]' $AWS_ACCOUNT_ID.dkr.ecr.$AWS_REGION.amazonaws.com/streamlit-app-repo:latest > imagedefinitions.json
+      - printf '[{"name":"streamlit-app","imageUri":"%s.dkr.ecr.%s.amazonaws.com/%s:%s"}]' $AWS_ACCOUNT_ID $AWS_REGION $ECR_REPO_NAME $IMAGE_TAG > imagedefinitions.json
 
 artifacts:
   files:
-    - imagedefinitions.json
+    - imagedefinitions.json  # This file tells ECS how to deploy the updated container
