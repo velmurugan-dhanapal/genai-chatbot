@@ -1,0 +1,32 @@
+version: 0.2
+
+phases:
+  install:
+    runtime-versions:
+      docker: 18
+    commands:
+      # Install AWS CLI to interact with ECR
+      - echo "Installing AWS CLI"
+  pre_build:
+    commands:
+      # Log in to AWS ECR
+      - echo "Logging in to Amazon ECR"
+      - $(aws ecr get-login --no-include-email --region $AWS_REGION)
+  build:
+    commands:
+      # Build Docker image for the Streamlit app
+      - echo "Building Docker image"
+      - docker build -t streamlit-app .
+      # Tag the Docker image for ECR
+      - docker tag streamlit-app:latest $AWS_ACCOUNT_ID.dkr.ecr.$AWS_REGION.amazonaws.com/streamlit-app-repo:latest
+      # Push the Docker image to ECR
+      - docker push $AWS_ACCOUNT_ID.dkr.ecr.$AWS_REGION.amazonaws.com/streamlit-app-repo:latest
+  post_build:
+    commands:
+      # Create imagedefinitions.json for ECS deployment
+      - echo "Creating ECS imagedefinitions.json"
+      - printf '[{"name":"streamlit-app","imageUri":"%s"}]' $AWS_ACCOUNT_ID.dkr.ecr.$AWS_REGION.amazonaws.com/streamlit-app-repo:latest > imagedefinitions.json
+
+artifacts:
+  files:
+    - imagedefinitions.json
