@@ -5,7 +5,7 @@ env:
     AWS_ACCOUNT_ID: "559050205029"
     AWS_REGION: "us-east-1"
     ECR_REPO_NAME: "chess-pl-sql-ecr-repo"
-    IMAGE_TAG: "latest"
+    IMAGE_TAG: "chess-pl-sql:latest"
     CLUSTER_NAME: "chess-pl-sql"
     SERVICE_NAME: "chess-pl-sql-svc"
 
