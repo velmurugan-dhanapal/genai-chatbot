@@ -12,35 +12,43 @@ env:
 phases:
   install:
     runtime-versions:
-      python: 3.12
+      docker: 20
+      python: 3.9  # Specify the Python version you need
     commands:
       - echo "Installing dependencies"
       - pip install --upgrade pip
       - pip install -r requirements.txt  # Install Python dependencies from requirements.txt
       - echo "Dependencies installed"
+      - echo "Logging in to Amazon ECR"
+      # Use the updated get-login-password command with AWS CLI v2
+      - aws ecr get-login-password --region $AWS_REGION | docker login --username AWS --password-stdin $AWS_ACCOUNT_ID.dkr.ecr.$AWS_REGION.amazonaws.com
+      - echo "Login successful"
 
   pre_build:
     commands:
-      # Log in to AWS ECR to allow pushing the Docker image to the ECR registry
-      - echo "Logging in to Amazon ECR"
-      - $(aws ecr get-login --no-include-email --region $AWS_REGION)
+      - echo "Starting pre-build phase"
+      - echo "Building the Docker image"
+      # Build Docker image using the Dockerfile in the repository
+      - docker build -t $AWS_ACCOUNT_ID.dkr.ecr.$AWS_REGION.amazonaws.com/$ECR_REPO_NAME:$IMAGE_TAG .
+      - echo "Docker image built"
 
   build:
     commands:
-      - echo "Building Docker image"
-      # Build the Docker image using the Python runtime to generate the app image
-      - docker build -t $AWS_ACCOUNT_ID.dkr.ecr.$AWS_REGION.amazonaws.com/$ECR_REPO_NAME:$IMAGE_TAG .
-      # Tag the Docker image to push to ECR
+      - echo "Tagging the Docker image"
+      # Tag Docker image for ECR
       - docker tag $AWS_ACCOUNT_ID.dkr.ecr.$AWS_REGION.amazonaws.com/$ECR_REPO_NAME:$IMAGE_TAG $AWS_ACCOUNT_ID.dkr.ecr.$AWS_REGION.amazonaws.com/$ECR_REPO_NAME:$IMAGE_TAG
-      # Push the Docker image to the ECR registry
+      - echo "Pushing Docker image to ECR"
+      # Push Docker image to ECR
       - docker push $AWS_ACCOUNT_ID.dkr.ecr.$AWS_REGION.amazonaws.com/$ECR_REPO_NAME:$IMAGE_TAG
+      - echo "Docker image pushed to ECR"
 
   post_build:
     commands:
-      # Create ECS deployment artifact (imagedefinitions.json) required by CodePipeline for ECS deployment
       - echo "Creating ECS imagedefinitions.json"
+      # Generate the imagedefinitions.json file for ECS deployment
       - printf '[{"name":"streamlit-app","imageUri":"%s.dkr.ecr.%s.amazonaws.com/%s:%s"}]' $AWS_ACCOUNT_ID $AWS_REGION $ECR_REPO_NAME $IMAGE_TAG > imagedefinitions.json
+      - echo "ECS imagedefinitions.json created"
 
 artifacts:
   files:
-    - imagedefinitions.json  # This file tells ECS how to deploy the updated container
+    - imagedefinitions.json  # This file is used by ECS to update the container image in the task definition
