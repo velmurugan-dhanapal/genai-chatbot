@@ -12,8 +12,7 @@ env:
 phases:
   install:
     runtime-versions:
-      docker: 20
-      python: 3.9  # Specify the Python version you need
+      python: 3.12 # Specify the Python version you need
     commands:
       - echo "Installing dependencies"
       - pip install --upgrade pip
